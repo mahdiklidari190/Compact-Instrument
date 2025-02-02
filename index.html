@@ -15,6 +15,7 @@
         .progress-bar { width: 100%; background: #444; border-radius: 5px; overflow: hidden; }
         .progress { height: 20px; background: #00ff99; width: 0%; transition: width 0.1s; }
         .progress-text { margin-top: 5px; font-size: 14px; }
+        .error { color: red; margin-top: 10px; }
     </style>
 </head>
 <body>
@@ -28,6 +29,7 @@
             <div class="progress-bar"><div id="compressProgress" class="progress"></div></div>
             <div id="compressProgressText" class="progress-text">0%</div>
         </div>
+        <div id="compressError" class="error"></div>
         <a id="downloadCompressed" style="display: none;">📥 دانلود فایل فشرده</a>
     </div>
 
@@ -39,6 +41,7 @@
             <div class="progress-bar"><div id="decompressProgress" class="progress"></div></div>
             <div id="decompressProgressText" class="progress-text">0%</div>
         </div>
+        <div id="decompressError" class="error"></div>
         <a id="downloadDecompressed" style="display: none;">📥 دانلود فایل استخراج‌شده</a>
     </div>
 
@@ -48,49 +51,99 @@
             textElement.innerText = percent.toFixed(1) + "%";
         }
 
+        function showError(element, message) {
+            element.innerText = message;
+            setTimeout(() => element.innerText = "", 5000); // پاک کردن خطا پس از 5 ثانیه
+        }
+
         async function compressFile() {
-            let file = document.getElementById("fileInput").files[0];
-            if (!file) return alert("📌 لطفاً یک فایل انتخاب کنید!");
-            
-            let zip = new JSZip();
-            zip.file(file.name, file);
+            const fileInput = document.getElementById("fileInput");
+            const compressProgress = document.getElementById("compressProgress");
+            const compressProgressText = document.getElementById("compressProgressText");
+            const compressError = document.getElementById("compressError");
+            const downloadLink = document.getElementById("downloadCompressed");
 
-            updateProgress(document.getElementById("compressProgress"), document.getElementById("compressProgressText"), 50);
-            
-            let compressedBlob = await zip.generateAsync({ type: "blob" });
+            // ریست کردن خطاها و پیشرفت
+            compressError.innerText = "";
+            downloadLink.style.display = "none";
+            updateProgress(compressProgress, compressProgressText, 0);
 
-            updateProgress(document.getElementById("compressProgress"), document.getElementById("compressProgressText"), 100);
+            try {
+                const file = fileInput.files[0];
+                if (!file) {
+                    showError(compressError, "📌 لطفاً یک فایل انتخاب کنید!");
+                    return;
+                }
 
-            let link = document.getElementById("downloadCompressed");
-            link.href = URL.createObjectURL(compressedBlob);
-            link.download = file.name + ".bk";
-            link.innerText = "📥 دانلود فایل فشرده‌شده";
-            link.style.display = "block";
+                const zip = new JSZip();
+                zip.file(file.name, file);
+
+                updateProgress(compressProgress, compressProgressText, 50);
+
+                const compressedBlob = await zip.generateAsync({ type: "blob" }, (metadata) => {
+                    updateProgress(compressProgress, compressProgressText, metadata.percent.toFixed(1));
+                });
+
+                updateProgress(compressProgress, compressProgressText, 100);
+
+                downloadLink.href = URL.createObjectURL(compressedBlob);
+                downloadLink.download = file.name + ".bk"; // تغییر پسوند به .bk
+                downloadLink.innerText = "📥 دانلود فایل فشرده‌شده";
+                downloadLink.style.display = "block";
+            } catch (error) {
+                showError(compressError, "❌ خطا در فشرده‌سازی فایل: " + error.message);
+            }
         }
 
         async function decompressFile() {
-            let file = document.getElementById("compressedInput").files[0];
-            if (!file) return alert("📌 لطفاً یک فایل انتخاب کنید!");
+            const compressedInput = document.getElementById("compressedInput");
+            const decompressProgress = document.getElementById("decompressProgress");
+            const decompressProgressText = document.getElementById("decompressProgressText");
+            const decompressError = document.getElementById("decompressError");
+            const downloadLink = document.getElementById("downloadDecompressed");
 
-            let reader = new FileReader();
-            reader.onload = async function(event) {
-                let zip = new JSZip();
-                let content = await zip.loadAsync(event.target.result);
+            // ریست کردن خطاها و پیشرفت
+            decompressError.innerText = "";
+            downloadLink.style.display = "none";
+            updateProgress(decompressProgress, decompressProgressText, 0);
 
-                updateProgress(document.getElementById("decompressProgress"), document.getElementById("decompressProgressText"), 50);
+            try {
+                const file = compressedInput.files[0];
+                if (!file) {
+                    showError(decompressError, "📌 لطفاً یک فایل انتخاب کنید!");
+                    return;
+                }
 
-                let fileNames = Object.keys(content.files);
-                let extractedBlob = await content.file(fileNames[0]).async("blob");
+                const reader = new FileReader();
+                reader.onload = async function(event) {
+                    try {
+                        const zip = new JSZip();
+                        const content = await zip.loadAsync(event.target.result);
 
-                updateProgress(document.getElementById("decompressProgress"), document.getElementById("decompressProgressText"), 100);
+                        updateProgress(decompressProgress, decompressProgressText, 50);
 
-                let link = document.getElementById("downloadDecompressed");
-                link.href = URL.createObjectURL(extractedBlob);
-                link.download = fileNames[0];
-                link.innerText = "📥 دانلود فایل استخراج‌شده";
-                link.style.display = "block";
-            };
-            reader.readAsArrayBuffer(file);
+                        const fileNames = Object.keys(content.files);
+                        if (fileNames.length === 0) {
+                            showError(decompressError, "❌ فایل فشرده خالی است!");
+                            return;
+                        }
+
+                        const extractedBlob = await content.file(fileNames[0]).async("blob");
+
+                        updateProgress(decompressProgress, decompressProgressText, 100);
+
+                        downloadLink.href = URL.createObjectURL(extractedBlob);
+                        downloadLink.download = fileNames[0];
+                        downloadLink.innerText = "📥 دانلود فایل استخراج‌شده";
+                        downloadLink.style.display = "block";
+                    } catch (error) {
+                        showError(decompressError, "❌ خطا در استخراج فایل: " + error.message);
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            } catch (error) {
+                showError(decompressError, "❌ خطا در خواندن فایل: " + error.message);
+            }
         }
     </script>
 </body>
