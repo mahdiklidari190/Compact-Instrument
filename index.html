@@ -4,46 +4,123 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>فشرده‌سازی فایل</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; margin: 20px; }
+        input, button { margin: 10px; padding: 10px; }
+    </style>
 </head>
 <body>
-
-<div class="container">
-    <h2>ابزار فشرده‌سازی و استخراج فایل</h2>
+    <h2>فشرده‌سازی فایل</h2>
     <input type="file" id="fileInput">
-    <button onclick="uploadFile('compress')">فشرده‌سازی</button>
-    <button onclick="uploadFile('decompress')">استخراج فایل</button>
-</div>
+    <button onclick="compressFile()">فشرده‌سازی</button>
+    <button onclick="decompressFile()">باز کردن فشرده</button>
+    <br>
+    <a id="downloadLink" style="display:none">دانلود فایل</a>
 
-<script>
-function uploadFile(action) {
-    let fileInput = document.getElementById('fileInput');
-    if (fileInput.files.length === 0) {
-        alert("لطفاً یک فایل انتخاب کنید.");
-        return;
-    }
-    
-    let file = fileInput.files[0];
-    let formData = new FormData();
-    formData.append("file", file);
+    <script>
+        function fileToBinary(file, callback) {
+            let reader = new FileReader();
+            reader.onload = function(e) {
+                let binaryString = '';
+                let bytes = new Uint8Array(e.target.result);
+                bytes.forEach(byte => {
+                    binaryString += byte.toString(2).padStart(8, '0');
+                });
+                callback(binaryString);
+            };
+            reader.readAsArrayBuffer(file);
+        }
 
-    fetch(`/${action}`, {
-        method: "POST",
-        body: formData
-    })
-    .then(response => response.blob())
-    .then(blob => {
-        let url = window.URL.createObjectURL(blob);
-        let a = document.createElement("a");
-        a.href = url;
-        a.download = action === "compress" ? "compressed.txt" : "decompressed.bin";
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-    })
-    .catch(error => console.error("خطا:", error));
-}
-</script>
+        function binaryToFile(binaryString) {
+            let byteArray = [];
+            for (let i = 0; i < binaryString.length; i += 8) {
+                byteArray.push(parseInt(binaryString.slice(i, i + 8), 2));
+            }
+            return new Blob([new Uint8Array(byteArray)]);
+        }
 
+        function compressBinary(binaryString) {
+            let compressed = "";
+            let count = 1;
+            for (let i = 1; i < binaryString.length; i++) {
+                if (binaryString[i] === binaryString[i - 1]) {
+                    count++;
+                } else {
+                    if (count >= 3) {
+                        compressed += count + binaryString[i - 1];
+                    } else {
+                        compressed += binaryString.slice(i - count, i);
+                    }
+                    count = 1;
+                }
+            }
+            if (count >= 3) {
+                compressed += count + binaryString[binaryString.length - 1];
+            } else {
+                compressed += binaryString.slice(-count);
+            }
+            return compressed;
+        }
+
+        function decompressBinary(compressedString) {
+            let binaryString = "";
+            let i = 0;
+            while (i < compressedString.length) {
+                if (!isNaN(compressedString[i])) {
+                    let count = parseInt(compressedString[i]);
+                    let char = compressedString[i + 1];
+                    binaryString += char.repeat(count);
+                    i += 2;
+                } else {
+                    binaryString += compressedString[i];
+                    i++;
+                }
+            }
+            return binaryString;
+        }
+
+        function compressFile() {
+            let fileInput = document.getElementById("fileInput").files[0];
+            if (!fileInput) {
+                alert("لطفاً یک فایل انتخاب کنید!");
+                return;
+            }
+
+            fileToBinary(fileInput, function(binaryString) {
+                let compressedData = compressBinary(binaryString);
+                let blob = new Blob([compressedData], { type: "text/plain" });
+                let url = URL.createObjectURL(blob);
+
+                let link = document.getElementById("downloadLink");
+                link.href = url;
+                link.download = "compressed.txt";
+                link.style.display = "block";
+                link.innerText = "دانلود فایل فشرده‌شده";
+            });
+        }
+
+        function decompressFile() {
+            let fileInput = document.getElementById("fileInput").files[0];
+            if (!fileInput) {
+                alert("لطفاً یک فایل فشرده انتخاب کنید!");
+                return;
+            }
+
+            let reader = new FileReader();
+            reader.onload = function(e) {
+                let compressedData = e.target.result;
+                let binaryString = decompressBinary(compressedData);
+                let blob = binaryToFile(binaryString);
+                let url = URL.createObjectURL(blob);
+
+                let link = document.getElementById("downloadLink");
+                link.href = url;
+                link.download = "decompressed.bin";
+                link.style.display = "block";
+                link.innerText = "دانلود فایل بازشده";
+            };
+            reader.readAsText(fileInput);
+        }
+    </script>
 </body>
 </html>
