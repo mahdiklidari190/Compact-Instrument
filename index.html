@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>فشرده‌سازی فایل</title>
+    <title>فشرده‌سازی فایل با پایتون</title>
+    <script src="https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js"></script>
     <style>
         body { font-family: Arial, sans-serif; text-align: center; margin: 20px; }
         input, button { margin: 10px; padding: 10px; }
@@ -13,114 +14,89 @@
     <h2>فشرده‌سازی فایل</h2>
     <input type="file" id="fileInput">
     <button onclick="compressFile()">فشرده‌سازی</button>
+    <a id="downloadCompressed" style="display: none;">دانلود فایل فشرده</a>
+
+    <h2>استخراج فایل فشرده</h2>
+    <input type="file" id="compressedInput">
     <button onclick="decompressFile()">باز کردن فشرده</button>
-    <br>
-    <a id="downloadLink" style="display:none">دانلود فایل</a>
+    <a id="downloadDecompressed" style="display: none;">دانلود فایل استخراج‌شده</a>
 
     <script>
-        function fileToBinary(file, callback) {
+        async function initPyodide() {
+            window.pyodide = await loadPyodide();
+            await pyodide.runPythonAsync(`
+def compress_binary(binary):
+    compressed = ""
+    count = 1
+    for i in range(1, len(binary)):
+        if binary[i] == binary[i - 1]:
+            count += 1
+        else:
+            compressed += f"{count}{binary[i - 1]}" if count >= 3 else binary[i - count:i]
+            count = 1
+    compressed += f"{count}{binary[-1]}" if count >= 3 else binary[-count:]
+    return compressed
+
+def decompress_binary(compressed):
+    binary = ""
+    i = 0
+    while i < len(compressed):
+        if compressed[i].isdigit():
+            count = int(compressed[i])
+            char = compressed[i + 1]
+            binary += char * count
+            i += 2
+        else:
+            binary += compressed[i]
+            i += 1
+    return binary
+            `);
+        }
+
+        async function compressFile() {
+            let file = document.getElementById("fileInput").files[0];
+            if (!file) return alert("لطفاً یک فایل انتخاب کنید!");
+
             let reader = new FileReader();
-            reader.onload = function(e) {
-                let binaryString = '';
-                let bytes = new Uint8Array(e.target.result);
-                bytes.forEach(byte => {
-                    binaryString += byte.toString(2).padStart(8, '0');
-                });
-                callback(binaryString);
+            reader.onload = async function(event) {
+                let binary = Array.from(new Uint8Array(event.target.result))
+                                  .map(byte => byte.toString(2).padStart(8, '0'))
+                                  .join('');
+
+                let compressed = await pyodide.runPythonAsync(`compress_binary('${binary}')`);
+                let blob = new Blob([compressed], { type: "text/plain" });
+                let link = document.getElementById("downloadCompressed");
+                link.href = URL.createObjectURL(blob);
+                link.download = file.name + ".compressed";
+                link.innerText = "دانلود فایل فشرده‌شده";
+                link.style.display = "block";
             };
             reader.readAsArrayBuffer(file);
         }
 
-        function binaryToFile(binaryString) {
-            let byteArray = [];
-            for (let i = 0; i < binaryString.length; i += 8) {
-                byteArray.push(parseInt(binaryString.slice(i, i + 8), 2));
-            }
-            return new Blob([new Uint8Array(byteArray)]);
-        }
-
-        function compressBinary(binaryString) {
-            let compressed = "";
-            let count = 1;
-            for (let i = 1; i < binaryString.length; i++) {
-                if (binaryString[i] === binaryString[i - 1]) {
-                    count++;
-                } else {
-                    if (count >= 3) {
-                        compressed += count + binaryString[i - 1];
-                    } else {
-                        compressed += binaryString.slice(i - count, i);
-                    }
-                    count = 1;
-                }
-            }
-            if (count >= 3) {
-                compressed += count + binaryString[binaryString.length - 1];
-            } else {
-                compressed += binaryString.slice(-count);
-            }
-            return compressed;
-        }
-
-        function decompressBinary(compressedString) {
-            let binaryString = "";
-            let i = 0;
-            while (i < compressedString.length) {
-                if (!isNaN(compressedString[i])) {
-                    let count = parseInt(compressedString[i]);
-                    let char = compressedString[i + 1];
-                    binaryString += char.repeat(count);
-                    i += 2;
-                } else {
-                    binaryString += compressedString[i];
-                    i++;
-                }
-            }
-            return binaryString;
-        }
-
-        function compressFile() {
-            let fileInput = document.getElementById("fileInput").files[0];
-            if (!fileInput) {
-                alert("لطفاً یک فایل انتخاب کنید!");
-                return;
-            }
-
-            fileToBinary(fileInput, function(binaryString) {
-                let compressedData = compressBinary(binaryString);
-                let blob = new Blob([compressedData], { type: "text/plain" });
-                let url = URL.createObjectURL(blob);
-
-                let link = document.getElementById("downloadLink");
-                link.href = url;
-                link.download = "compressed.txt";
-                link.style.display = "block";
-                link.innerText = "دانلود فایل فشرده‌شده";
-            });
-        }
-
-        function decompressFile() {
-            let fileInput = document.getElementById("fileInput").files[0];
-            if (!fileInput) {
-                alert("لطفاً یک فایل فشرده انتخاب کنید!");
-                return;
-            }
+        async function decompressFile() {
+            let file = document.getElementById("compressedInput").files[0];
+            if (!file) return alert("لطفاً یک فایل انتخاب کنید!");
 
             let reader = new FileReader();
-            reader.onload = function(e) {
-                let compressedData = e.target.result;
-                let binaryString = decompressBinary(compressedData);
-                let blob = binaryToFile(binaryString);
-                let url = URL.createObjectURL(blob);
-
-                let link = document.getElementById("downloadLink");
-                link.href = url;
+            reader.onload = async function(event) {
+                let compressed = event.target.result;
+                let binary = await pyodide.runPythonAsync(`decompress_binary('${compressed}')`);
+                
+                let byteArray = new Uint8Array(binary.match(/.{1,8}/g).map(byte => parseInt(byte, 2)));
+                let blob = new Blob([byteArray], { type: "application/octet-stream" });
+                let link = document.createElement("a");
+                link.href = URL.createObjectURL(blob);
                 link.download = "decompressed.bin";
+                link.innerText = "دانلود فایل استخراج‌شده";
+                document.getElementById("downloadDecompressed").replaceWith(link);
+                link.id = "downloadDecompressed";
                 link.style.display = "block";
-                link.innerText = "دانلود فایل بازشده";
             };
-            reader.readAsText(fileInput);
+            reader.readAsText(file);
         }
+
+        initPyodide();
     </script>
 </body>
 </html>
