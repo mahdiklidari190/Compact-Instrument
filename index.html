@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="fa">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>فشرده‌سازی فایل</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+
+<div class="container">
+    <h2>ابزار فشرده‌سازی و استخراج فایل</h2>
+    <input type="file" id="fileInput">
+    <button onclick="uploadFile('compress')">فشرده‌سازی</button>
+    <button onclick="uploadFile('decompress')">استخراج فایل</button>
+</div>
+
+<script>
+function uploadFile(action) {
+    let fileInput = document.getElementById('fileInput');
+    if (fileInput.files.length === 0) {
+        alert("لطفاً یک فایل انتخاب کنید.");
+        return;
+    }
+    
+    let file = fileInput.files[0];
+    let formData = new FormData();
+    formData.append("file", file);
+
+    fetch(`/${action}`, {
+        method: "POST",
+        body: formData
+    })
+    .then(response => response.blob())
+    .then(blob => {
+        let url = window.URL.createObjectURL(blob);
+        let a = document.createElement("a");
+        a.href = url;
+        a.download = action === "compress" ? "compressed.txt" : "decompressed.bin";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    })
+    .catch(error => console.error("خطا:", error));
+}
+</script>
+
+</body>
+</html>
