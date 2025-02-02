@@ -3,64 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>فشرده‌سازی و استخراج فایل - BKX</title>
+    <title>فشرده‌سازی و استخراج فایل</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            text-align: center;
-            margin: 20px;
-            background: #121212;
-            color: white;
-        }
-        .container {
-            width: 90%;
-            max-width: 500px;
-            margin: auto;
-            padding: 20px;
-            background: #1e1e1e;
-            border-radius: 10px;
-            box-shadow: 0px 0px 10px rgba(255, 255, 255, 0.2);
-        }
-        input, button {
-            margin: 10px;
-            padding: 10px;
-            width: 90%;
-            border-radius: 5px;
-        }
-        button {
-            background: #00ff99;
-            border: none;
-            cursor: pointer;
-            font-weight: bold;
-        }
-        button:hover {
-            background: #00cc77;
-        }
-        .progress-container {
-            margin-top: 10px;
-            text-align: center;
-        }
-        .progress-bar {
-            width: 100%;
-            background: #444;
-            border-radius: 5px;
-            overflow: hidden;
-        }
-        .progress {
-            height: 20px;
-            background: #00ff99;
-            width: 0%;
-            transition: width 0.1s;
-        }
-        .progress-text {
-            margin-top: 5px;
-            font-size: 14px;
-        }
+        body { text-align: center; background: #121212; color: white; font-family: Arial, sans-serif; }
+        .container { background: #1e1e1e; padding: 20px; margin: auto; width: 90%; max-width: 500px; border-radius: 10px; box-shadow: 0px 0px 10px rgba(255, 255, 255, 0.2); }
+        input, button { margin: 10px; padding: 10px; width: 90%; border-radius: 5px; }
+        button { background: #00ff99; border: none; cursor: pointer; font-weight: bold; }
+        button:hover { background: #00cc77; }
+        .progress-container { text-align: center; margin-top: 10px; }
+        .progress-bar { width: 100%; background: #444; border-radius: 5px; overflow: hidden; }
+        .progress { height: 20px; background: #00ff99; width: 0%; transition: width 0.1s; }
+        .progress-text { margin-top: 5px; font-size: 14px; }
     </style>
 </head>
 <body>
-    <h2>📂 فشرده‌سازی و استخراج فایل - BKX</h2>
-    
+    <h2>📂 فشرده‌سازی و استخراج فایل</h2>
+
     <div class="container">
         <h3>🔻 فشرده‌سازی</h3>
         <input type="file" id="fileInput">
@@ -89,90 +48,49 @@
             textElement.innerText = percent.toFixed(1) + "%";
         }
 
-        function fileToBinary(file, callback, progressElement, progressText) {
-            let reader = new FileReader();
-            reader.onload = function(event) {
-                let bytes = new Uint8Array(event.target.result);
-                let binary = "";
-                for (let i = 0; i < bytes.length; i++) {
-                    binary += bytes[i].toString(2).padStart(8, '0');
-                    if (i % 5000 === 0) updateProgress(progressElement, progressText, (i / bytes.length) * 100);
-                }
-                updateProgress(progressElement, progressText, 100);
-                callback(binary);
-            };
-            reader.readAsArrayBuffer(file);
-        }
-
-        function binaryToFile(binary, filename) {
-            let byteArray = new Uint8Array(binary.match(/.{1,8}/g).map(byte => parseInt(byte, 2)));
-            let blob = new Blob([byteArray], { type: "application/octet-stream" });
-            let link = document.createElement("a");
-            link.href = URL.createObjectURL(blob);
-            link.download = filename;
-            link.style.display = "block";
-            return link;
-        }
-
-        function compressBinary(binary, progressElement, progressText) {
-            let compressed = "";
-            let i = 0;
-            while (i < binary.length) {
-                let count = 1;
-                while (i + count < binary.length && binary[i] === binary[i + count] && count < 9) {
-                    count++;
-                }
-                compressed += count.toString() + binary[i];
-                i += count;
-                if (i % 5000 === 0) updateProgress(progressElement, progressText, (i / binary.length) * 100);
-            }
-            updateProgress(progressElement, progressText, 100);
-            return compressed;
-        }
-
-        function decompressBinary(compressed, progressElement, progressText) {
-            let binary = "";
-            let i = 0;
-            while (i < compressed.length) {
-                let count = parseInt(compressed[i]);
-                let char = compressed[i + 1];
-                binary += char.repeat(count);
-                i += 2;
-                if (i % 5000 === 0) updateProgress(progressElement, progressText, (i / compressed.length) * 100);
-            }
-            updateProgress(progressElement, progressText, 100);
-            return binary;
-        }
-
-        function compressFile() {
+        async function compressFile() {
             let file = document.getElementById("fileInput").files[0];
             if (!file) return alert("📌 لطفاً یک فایل انتخاب کنید!");
             
-            fileToBinary(file, function(binary) {
-                let compressed = compressBinary(binary, document.getElementById("compressProgress"), document.getElementById("compressProgressText"));
-                let blob = new Blob([compressed], { type: "text/plain" });
-                let link = document.getElementById("downloadCompressed");
-                link.href = URL.createObjectURL(blob);
-                link.download = file.name + ".bk";
-                link.innerText = "📥 دانلود فایل فشرده‌شده";
-                link.style.display = "block";
-            }, document.getElementById("compressProgress"), document.getElementById("compressProgressText"));
+            let zip = new JSZip();
+            zip.file(file.name, file);
+
+            updateProgress(document.getElementById("compressProgress"), document.getElementById("compressProgressText"), 50);
+            
+            let compressedBlob = await zip.generateAsync({ type: "blob" });
+
+            updateProgress(document.getElementById("compressProgress"), document.getElementById("compressProgressText"), 100);
+
+            let link = document.getElementById("downloadCompressed");
+            link.href = URL.createObjectURL(compressedBlob);
+            link.download = file.name + ".bk";
+            link.innerText = "📥 دانلود فایل فشرده‌شده";
+            link.style.display = "block";
         }
 
-        function decompressFile() {
+        async function decompressFile() {
             let file = document.getElementById("compressedInput").files[0];
             if (!file) return alert("📌 لطفاً یک فایل انتخاب کنید!");
-            
+
             let reader = new FileReader();
-            reader.onload = function(event) {
-                let compressed = event.target.result;
-                let binary = decompressBinary(compressed, document.getElementById("decompressProgress"), document.getElementById("decompressProgressText"));
-                let link = binaryToFile(binary, "decompressed.bin");
-                document.getElementById("downloadDecompressed").replaceWith(link);
-                link.id = "downloadDecompressed";
+            reader.onload = async function(event) {
+                let zip = new JSZip();
+                let content = await zip.loadAsync(event.target.result);
+
+                updateProgress(document.getElementById("decompressProgress"), document.getElementById("decompressProgressText"), 50);
+
+                let fileNames = Object.keys(content.files);
+                let extractedBlob = await content.file(fileNames[0]).async("blob");
+
+                updateProgress(document.getElementById("decompressProgress"), document.getElementById("decompressProgressText"), 100);
+
+                let link = document.getElementById("downloadDecompressed");
+                link.href = URL.createObjectURL(extractedBlob);
+                link.download = fileNames[0];
                 link.innerText = "📥 دانلود فایل استخراج‌شده";
+                link.style.display = "block";
             };
-            reader.readAsText(file);
+            reader.readAsArrayBuffer(file);
         }
     </script>
 </body>
