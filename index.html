@@ -5,151 +5,71 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>فشرده‌سازی و استخراج فایل</title>
     <style>
-        body { font-family: Arial, sans-serif; text-align: center; margin: 20px; }
-        input, button { margin: 10px; padding: 10px; }
-        .progress-container { width: 100%; max-width: 300px; background: #ddd; margin: 10px auto; border-radius: 5px; }
-        .progress-bar { height: 20px; width: 0%; background: #4caf50; border-radius: 5px; transition: width 0.2s; }
-        .progress-text { font-weight: bold; margin-top: 5px; }
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 20px;
+            background: #121212;
+            color: white;
+        }
+        .container {
+            width: 90%;
+            max-width: 500px;
+            margin: auto;
+            padding: 20px;
+            background: #1e1e1e;
+            border-radius: 10px;
+            box-shadow: 0px 0px 10px rgba(255, 255, 255, 0.2);
+        }
+        input, button {
+            margin: 10px;
+            padding: 10px;
+            width: 90%;
+            border-radius: 5px;
+        }
+        button {
+            background: #00ff99;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover {
+            background: #00cc77;
+        }
+        .progress-bar {
+            width: 100%;
+            background: #444;
+            border-radius: 5px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+        .progress {
+            height: 20px;
+            background: #00ff99;
+            width: 0%;
+            transition: width 0.3s;
+        }
     </style>
 </head>
 <body>
-    <h2>فشرده‌سازی فایل</h2>
-    <input type="file" id="fileInput">
-    <button onclick="compressFile()">فشرده‌سازی</button>
-    <div class="progress-container"><div class="progress-bar" id="compressProgress"></div></div>
-    <p class="progress-text" id="compressProgressText">0%</p>
-    <a id="downloadCompressed" style="display: none;">دانلود فایل فشرده</a>
+    <h2>📂 فشرده‌سازی و استخراج فایل</h2>
+    
+    <div class="container">
+        <h3>🔻 فشرده‌سازی</h3>
+        <input type="file" id="fileInput">
+        <button onclick="compressFile()">فشرده‌سازی</button>
+        <div class="progress-bar"><div id="compressProgress" class="progress"></div></div>
+        <a id="downloadCompressed" style="display: none;">📥 دانلود فایل فشرده</a>
+    </div>
 
-    <h2>استخراج فایل فشرده</h2>
-    <input type="file" id="compressedInput">
-    <button onclick="decompressFile()">باز کردن فشرده</button>
-    <div class="progress-container"><div class="progress-bar" id="decompressProgress"></div></div>
-    <p class="progress-text" id="decompressProgressText">0%</p>
-    <a id="downloadDecompressed" style="display: none;">دانلود فایل استخراج‌شده</a>
+    <div class="container">
+        <h3>🔺 استخراج فایل فشرده</h3>
+        <input type="file" id="compressedInput">
+        <button onclick="decompressFile()">باز کردن فشرده</button>
+        <div class="progress-bar"><div id="decompressProgress" class="progress"></div></div>
+        <a id="downloadDecompressed" style="display: none;">📥 دانلود فایل استخراج‌شده</a>
+    </div>
 
-    <script>
-        function updateProgress(progressElement, textElement, value) {
-            progressElement.style.width = value + "%";
-            textElement.innerText = value + "%";
-        }
-
-        function fileToBinary(file, callback, progressElement, textElement) {
-            let reader = new FileReader();
-            reader.onload = function(event) {
-                let binary = "";
-                let bytes = new Uint8Array(event.target.result);
-                let total = bytes.length;
-                for (let i = 0; i < total; i++) {
-                    binary += bytes[i].toString(2).padStart(8, '0');
-                    if (i % 1000 === 0 || i === total - 1) {
-                        let percent = Math.round((i / total) * 100);
-                        updateProgress(progressElement, textElement, percent);
-                    }
-                }
-                callback(binary);
-            };
-            reader.readAsArrayBuffer(file);
-        }
-
-        function binaryToFile(binary, filename, progressElement, textElement) {
-            let byteArray = new Uint8Array(binary.match(/.{1,8}/g).map((byte, index, arr) => {
-                let value = parseInt(byte, 2);
-                if (index % 1000 === 0 || index === arr.length - 1) {
-                    let percent = Math.round((index / arr.length) * 100);
-                    updateProgress(progressElement, textElement, percent);
-                }
-                return value;
-            }));
-            let blob = new Blob([byteArray], { type: "application/octet-stream" });
-            let link = document.createElement("a");
-            link.href = URL.createObjectURL(blob);
-            link.download = filename;
-            link.style.display = "block";
-            return link;
-        }
-
-        function compressBinary(binary, progressElement, textElement) {
-            let compressed = "";
-            let count = 1;
-            let total = binary.length;
-            for (let i = 1; i < total; i++) {
-                if (binary[i] === binary[i - 1]) {
-                    count++;
-                } else {
-                    compressed += (count > 3 ? count : binary.slice(i - count, i)) + binary[i - 1];
-                    count = 1;
-                }
-                if (i % 1000 === 0 || i === total - 1) {
-                    let percent = Math.round((i / total) * 100);
-                    updateProgress(progressElement, textElement, percent);
-                }
-            }
-            compressed += (count > 3 ? count : binary.slice(-count)) + binary[binary.length - 1];
-            return compressed;
-        }
-
-        function decompressBinary(compressed, progressElement, textElement) {
-            let binary = "";
-            let total = compressed.length;
-            let i = 0;
-            while (i < total) {
-                if (!isNaN(compressed[i])) {
-                    let count = parseInt(compressed[i]);
-                    let char = compressed[i + 1];
-                    binary += char.repeat(count);
-                    i += 2;
-                } else {
-                    binary += compressed[i];
-                    i++;
-                }
-                if (i % 1000 === 0 || i === total - 1) {
-                    let percent = Math.round((i / total) * 100);
-                    updateProgress(progressElement, textElement, percent);
-                }
-            }
-            return binary;
-        }
-
-        function compressFile() {
-            let file = document.getElementById("fileInput").files[0];
-            if (!file) return alert("لطفاً یک فایل انتخاب کنید!");
-            
-            let progressElement = document.getElementById("compressProgress");
-            let textElement = document.getElementById("compressProgressText");
-            updateProgress(progressElement, textElement, 0);
-
-            fileToBinary(file, function(binary) {
-                let compressed = compressBinary(binary, progressElement, textElement);
-                let blob = new Blob([compressed], { type: "text/plain" });
-                let link = document.getElementById("downloadCompressed");
-                link.href = URL.createObjectURL(blob);
-                link.download = file.name + ".bke";
-                link.innerText = "دانلود فایل فشرده‌شده";
-                link.style.display = "block";
-                updateProgress(progressElement, textElement, 100);
-            }, progressElement, textElement);
-        }
-
-        function decompressFile() {
-            let file = document.getElementById("compressedInput").files[0];
-            if (!file) return alert("لطفاً یک فایل انتخاب کنید!");
-            
-            let progressElement = document.getElementById("decompressProgress");
-            let textElement = document.getElementById("decompressProgressText");
-            updateProgress(progressElement, textElement, 0);
-
-            let reader = new FileReader();
-            reader.onload = function(event) {
-                let compressed = event.target.result;
-                let binary = decompressBinary(compressed, progressElement, textElement);
-                let link = binaryToFile(binary, "decompressed.bin", progressElement, textElement);
-                document.getElementById("downloadDecompressed").replaceWith(link);
-                link.id = "downloadDecompressed";
-                link.innerText = "دانلود فایل استخراج‌شده";
-                updateProgress(progressElement, textElement, 100);
-            };
-            reader.readAsText(file);
-        }
-    </script>
+    <script src="script.js"></script>
 </body>
 </html>
